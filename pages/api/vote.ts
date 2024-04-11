@@ -8,6 +8,7 @@ const client = HUB_URL ? getSSLHubRpcClient(HUB_URL) : undefined;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method === 'POST') {
+        console.info(`Valid POST request`);
         // Process the vote
         // For example, let's assume you receive an option in the body
         try {
@@ -20,6 +21,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
             let validatedMessage : Message | undefined = undefined;
             try {
+                console.info(`Try validate message`);
                 const frameMessage = Message.decode(Buffer.from(req.body?.trustedData?.messageBytes || '', 'hex'));
                 const result = await client?.validateMessage(frameMessage);
                 if (result && result.isOk() && result.value.valid) {
@@ -27,11 +29,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 }
 
                 // Also validate the frame url matches the expected url
+                console.info(`Validate message ${validatedMessage}`);
+                console.info(`Try frame url message`);
                 let urlBuffer = validatedMessage?.data?.frameActionBody?.url || [];
                 const urlString = Buffer.from(urlBuffer).toString('utf-8');
                 if (validatedMessage && !urlString.startsWith(process.env['HOST'] || '')) {
                     return res.status(400).send(`Invalid frame url: ${urlBuffer}`);
                 }
+                console.info(`URl buffer: ${urlBuffer}`);
             } catch (e)  {
                 return res.status(400).send(`Failed to validate message: ${e}`);
             }
@@ -45,6 +50,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 buttonId = req.body?.untrustedData?.buttonIndex || 0;
                 fid = req.body?.untrustedData?.fid || 0;
             }
+            console.info(`ButtonId: ${buttonId}`);
+            console.info(`fidId: ${fid}`);
 
             // Clicked create poll
             if ((results || voted) && buttonId === 2) {
@@ -53,6 +60,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
             const voteExists = await kv.sismember(`poll:${pollId}:voted`, fid)
             voted = voted || !!voteExists
+            console.info(`Voted: ${voted}`);
 
             if (fid > 0 && buttonId > 0 && buttonId < 5 && !results && !voted) {
                 let multi = kv.multi();
@@ -64,11 +72,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             }
 
             let poll: Poll | null = await kv.hgetall(`poll:${pollId}`);
+            console.info(`Poll: ${poll?.id}`);
 
             if (!poll) {
                 return res.status(400).send('Missing poll ID');
             }
             const imageUrl = `${process.env['HOST']}/api/image?id=${poll.id}&results=${results ? 'false': 'true'}&date=${Date.now()}${ fid > 0 ? `&fid=${fid}` : '' }`;
+            console.info(`Image url: ${imageUrl}`);
             let button1Text = "View Results";
             if (!voted && !results) {
                 button1Text = "Back"
